@@ -5,11 +5,6 @@ const SK = "tangent_brain_v5";
 function load() { try { const r = localStorage.getItem(SK); return r ? JSON.parse(r) : {}; } catch { return {}; } }
 function save(d) { try { localStorage.setItem(SK, JSON.stringify(d)); } catch {} }
 
-// ─── CONFIG — paste your Gemini API key here ──────────────────────────────────
-// Get a free key at: https://aistudio.google.com/app/apikey
-const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE";
-const GEMINI_MODEL   = "gemini-2.0-flash";
-const GEMINI_BASE    = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}`;
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const PALETTE = ["#f87171","#fb923c","#fbbf24","#a3e635","#34d399","#22d3ee",
@@ -26,31 +21,39 @@ const QC_COLOR = "#f97316";
 
 // Standard generation — no search
 async function gemini(systemPrompt, userPrompt, maxTokens = 1500) {
-  const url = `${GEMINI_BASE}:generateContent?key=${GEMINI_API_KEY}`;
-  const body = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 }
-  };
-  const res  = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+  const res = await fetch("/api/gemini", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gemini-2.0-flash",
+      payload: {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 }
+      }
+    })
+  });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
   return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 }
 
-// Search-grounded generation — uses Google Search natively (free, no extra API)
 async function geminiSearch(systemPrompt, userPrompt, maxTokens = 2000) {
-  const url = `${GEMINI_BASE}:generateContent?key=${GEMINI_API_KEY}`;
-  const body = {
-    system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-    tools: [{ google_search: {} }],
-    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 }
-  };
-  const res  = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+  const res = await fetch("/api/gemini", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gemini-2.0-flash",
+      payload: {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        tools: [{ google_search: {} }],
+        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 }
+      }
+    })
+  });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
-  // Collect all text parts (search may produce multiple)
   const parts = data.candidates?.[0]?.content?.parts || [];
   return parts.filter(p => p.text).map(p => p.text).join("\n") || "";
 }
@@ -162,37 +165,10 @@ function Spinner({ color }) {
   return <div style={{ width:10, height:10, borderRadius:"50%", border:`2px solid ${color}`, borderTopColor:"transparent", animation:"spin 0.8s linear infinite" }} />;
 }
 
-function ApiKeyBanner({ onSave }) {
-  const [val, setVal] = useState("");
-  return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(6,8,16,0.97)", zIndex:9999, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
-      <div style={{ fontSize:32, marginBottom:16, color:QC_COLOR }}>⚙</div>
-      <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:20, color:"#f0f4ff", marginBottom:8 }}>Gemini API Key Required</div>
-      <div style={{ fontSize:13, color:"#4a5a75", marginBottom:6, textAlign:"center", maxWidth:440, lineHeight:1.6 }}>
-        Tangent Brain runs on <strong style={{color:"#60a5fa"}}>Gemini 2.0 Flash</strong> — free via Google AI Studio.
-      </div>
-      <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer"
-        style={{ fontSize:12, color:"#a78bfa", marginBottom:24, fontFamily:"'Syne Mono',monospace" }}>
-        → Get your free key at aistudio.google.com
-      </a>
-      <div style={{ display:"flex", gap:10, width:"100%", maxWidth:460 }}>
-        <input value={val} onChange={e=>setVal(e.target.value)} placeholder="AIza..."
-          style={{ flex:1, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"10px 14px", color:"#d8e0f0", fontSize:13, fontFamily:"'Syne Mono',monospace" }} />
-        <button onClick={()=>val.trim()&&onSave(val.trim())}
-          style={{ padding:"10px 20px", borderRadius:8, border:"none", background:"linear-gradient(135deg,#1d4ed8,#7c3aed)", color:"#f0f4ff", fontSize:13, fontWeight:600, cursor:"pointer" }}>
-          Save
-        </button>
-      </div>
-      <div style={{ fontSize:10, color:"#2a3a50", marginTop:12, fontFamily:"'Syne Mono',monospace" }}>
-        Key is saved to localStorage — never leaves your browser
-      </div>
-    </div>
-  );
-}
+
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function TangentBrain() {
-  const [apiKey, setApiKey]               = useState(() => localStorage.getItem("tb_gemini_key") || GEMINI_API_KEY);
   const [tab, setTab]                     = useState("capture");
   const [thoughts, setThoughts]           = useState([]);
   const [clusters, setClusters]           = useState([]);
@@ -526,11 +502,6 @@ Return ONLY a raw JSON object — no markdown, no explanation:
     setQcRunning(false);
   }
 
-  // ── Save API key ───────────────────────────────────────────────────────────
-  function saveApiKey(key) {
-    localStorage.setItem("tb_gemini_key", key);
-    setApiKey(key);
-  }
 
   // ── Derived state ──────────────────────────────────────────────────────────
   const selected        = thoughts.find(t => t.id===selectedId);
@@ -560,7 +531,6 @@ Return ONLY a raw JSON object — no markdown, no explanation:
     { id:"qc",       label:`QC (${qcReports.length})`,        icon:"⊛", accent:QC_COLOR },
   ];
 
-  const needsKey = !apiKey || apiKey === "YOUR_GEMINI_API_KEY_HERE";
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -586,8 +556,6 @@ Return ONLY a raw JSON object — no markdown, no explanation:
       {/* BG grid */}
       <div style={{ position:"fixed",inset:0,pointerEvents:"none",zIndex:0,backgroundImage:"linear-gradient(rgba(255,255,255,0.022) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.022) 1px,transparent 1px)",backgroundSize:"44px 44px" }} />
 
-      {/* API key gate */}
-      {needsKey && <ApiKeyBanner onSave={saveApiKey} />}
 
       {/* Toast */}
       {toast && <div style={{ position:"fixed",bottom:24,right:24,zIndex:999,background:"rgba(6,8,16,0.95)",border:"1px solid rgba(255,255,255,0.09)",color:"#d8e0f0",padding:"10px 18px",borderRadius:10,fontSize:12,fontFamily:"'Syne Mono',monospace",animation:"nt 3.5s ease forwards",backdropFilter:"blur(12px)" }}>{toast.msg}</div>}
@@ -608,8 +576,6 @@ Return ONLY a raw JSON object — no markdown, no explanation:
             <AgentPill label="SCOUT"      running={scoutRunning}                                           color="#38bdf8" />
             <AgentPill label="DIGEST"     running={digestRunning}                                          color="#fbbf24" />
             <AgentPill label="QC"         running={qcRunning||thoughts.some(t=>t.agentStatus?.qc==="running")} color={QC_COLOR} />
-            <button onClick={()=>saveApiKey("")} style={{ padding:"3px 9px",borderRadius:20,border:"1px solid rgba(255,255,255,0.07)",background:"transparent",color:"#2a3a50",fontSize:9,fontFamily:"'Syne Mono',monospace" }}
-              onMouseEnter={e=>{e.target.style.color="#d8e0f0";}} onMouseLeave={e=>{e.target.style.color="#2a3a50";}}>⚙ KEY</button>
           </div>
         </div>
         <div style={{ display:"flex",padding:"0 28px",gap:0,overflowX:"auto" }}>

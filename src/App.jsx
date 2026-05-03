@@ -225,9 +225,9 @@ export default function TangentBrain() {
   const setAgt  = useCallback((id, ag, st) => setThoughts(p => p.map(t => t.id===id ? {...t, agentStatus:{...t.agentStatus,[ag]:st}} : t)), []);
 
   // Inject the live API key into every call
-  function G(sys, usr, tok)        { return gemini(sys, usr, tok,     apiKey); }
-  function GS(sys, usr, tok)       { return geminiSearch(sys, usr, tok, apiKey); }
-  function GJ(sys, usr, tok)       { return geminiJSON(sys, usr, tok,  apiKey); }
+  function G(sys, usr, tok)        { return gemini(sys, usr, tok); }
+  function GS(sys, usr, tok)       { return geminiSearch(sys, usr, tok); }
+  function GJ(sys, usr, tok)       { return geminiJSON(sys, usr, tok); }
 
   // ── Agent 1: Classifier ────────────────────────────────────────────────────
   async function runClassifier(id, raw) {
